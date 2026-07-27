@@ -58,6 +58,7 @@
         ocp_password: "{{ lookup('env', 'OCP_HUB_CLUSTER_PASSWORD') | default(OCP_HUB_CLUSTER_PASSWORD, true) }}"
         api_url: "{{ lookup('env', 'OCP_HUB_API_URL') | default(OCP_HUB_API_URL, true) }}"
         mce_namespace: "{{ lookup('env', 'MCE_NAMESPACE') | default(mce_namespace, true) }}"
+      when: deployment_mode != 'standalone'
 
     - name: Load cluster state from previous suite run
       ansible.builtin.include_vars:
@@ -104,6 +105,17 @@
 
     - name: Login to OCP cluster
       include_tasks: ../tasks/login_ocp.yml
+      when: deployment_mode != 'standalone'
+
+    - name: Get current kube context
+      shell: oc config current-context
+      register: current_context
+      changed_when: false
+      when: deployment_mode == 'standalone'
+
+    - set_fact:
+        ocp_context: "{{ current_context.stdout | trim }}"
+      when: deployment_mode == 'standalone'
 
     - name: Display deletion configuration
       debug:
