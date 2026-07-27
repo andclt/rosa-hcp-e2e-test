@@ -63,7 +63,13 @@
       ansible.builtin.include_vars:
         file: "{{ playbook_dir }}/../.last-cluster.json"
       when: cluster_name is not defined and name_prefix is not defined
+      register: load_cluster_state
       ignore_errors: true
+
+    - name: Warn if cluster state file could not be loaded
+      debug:
+        msg: "Warning: failed to load .last-cluster.json — {{ load_cluster_state.msg | default('file not found or malformed') }}"
+      when: load_cluster_state is defined and load_cluster_state is failed
 
     - name: Derive cluster_name from name_prefix if provided
       set_fact:
@@ -125,6 +131,18 @@
 
     - name: Delete ROSA HCP cluster resources
       include_tasks: ../tasks/delete_rosa_hcp_resources.yml
+
+    - name: Clean up persisted cluster state
+      file:
+        path: "{{ playbook_dir }}/../.last-cluster.json"
+        state: absent
+      register: cleanup_cluster_state
+      ignore_errors: true
+
+    - name: Warn if persisted cluster state cleanup failed
+      debug:
+        msg: "Warning: failed to remove .last-cluster.json — {{ cleanup_cluster_state.msg | default('unknown cleanup error') }}"
+      when: cleanup_cluster_state is failed
 
     - name: Deletion complete
       debug:
