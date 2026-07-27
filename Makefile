@@ -2,7 +2,6 @@ export OCM_CLIENT_ID ?=
 export OCM_API_URL ?=
 export OCM_CLIENT_SECRET ?=
 export AWS_B64ENCODED_CREDENTIALS ?=
-export DEPLOYMENT_MODE ?= standalone
 DEFAULT_TEST_SUITE ?= --list
 PULL_SECRET_FILE ?=
 
@@ -19,7 +18,9 @@ crc-standalone:
 		crc config set pull-secret-file $(PULL_SECRET_FILE); \
 	fi
 	crc start
-	@eval $$(crc console --credentials 2>/dev/null | grep kubeadmin | sed "s/.*'\(oc login[^']*\)'.*/\1/")
+	@LOGIN_CMD=$$(crc console --credentials 2>/dev/null | grep kubeadmin | sed "s/.*'\(oc login[^']*\)'.*/\1/"); \
+		if [ -z "$$LOGIN_CMD" ]; then echo "Error: failed to extract kubeadmin login from crc"; exit 1; fi; \
+		eval "$$LOGIN_CMD"
 	DEPLOYMENT_MODE=standalone ./run-test-suite.py --tag smoke -vvv
 
 crc-stop:

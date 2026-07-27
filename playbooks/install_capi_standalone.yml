@@ -61,12 +61,15 @@
 
     - name: Install CAPI core controllers via Helm (standalone adjustments applied)
       shell: |
+        set -o pipefail
         helm template {{ output_dir }}/cluster-api-installer/charts/cluster-api \
           --include-crds \
           --namespace capi-system \
           --set ocp.enabled=true \
         | sed '/--watch-filter=multicluster-engine/d' \
         | oc apply -n capi-system -f - --server-side --force-conflicts
+      args:
+        executable: /bin/bash
 
     - name: Remove MCE webhook (not needed in standalone mode)
       shell: |
