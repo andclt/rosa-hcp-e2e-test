@@ -305,44 +305,42 @@
           changed_when: false
           no_log: true
 
-        - name: Write temporary kubeconfig for OVN check
-          copy:
-            content: "{{ cluster_kubeconfig_raw.stdout }}"
-            dest: "/tmp/.ovn-check-kubeconfig-{{ cluster_name }}"
-            mode: "0600"
-          no_log: true
+        - name: OVN-Kubernetes pod check
           when: cluster_kubeconfig_raw.rc == 0 and cluster_kubeconfig_raw.stdout | length > 0
+          block:
+            - name: Write temporary kubeconfig for OVN check
+              copy:
+                content: "{{ cluster_kubeconfig_raw.stdout }}"
+                dest: "/tmp/.ovn-check-kubeconfig-{{ cluster_name }}"
+                mode: "0600"
+              no_log: true
 
-        - name: Check for OVN-Kubernetes pods on provisioned cluster
-          command:
-            argv:
-              - oc
-              - --kubeconfig=/tmp/.ovn-check-kubeconfig-{{ cluster_name }}
-              - get
-              - pods
-              - -n
-              - openshift-ovn-kubernetes
-              - --no-headers
-          register: ovn_pod_count_raw
-          failed_when: false
-          changed_when: false
-          no_log: true
-          when: cluster_kubeconfig_raw.rc == 0 and cluster_kubeconfig_raw.stdout | length > 0
+            - name: Check for OVN-Kubernetes pods on provisioned cluster
+              command:
+                argv:
+                  - oc
+                  - --kubeconfig=/tmp/.ovn-check-kubeconfig-{{ cluster_name }}
+                  - get
+                  - pods
+                  - -n
+                  - openshift-ovn-kubernetes
+                  - --no-headers
+              register: ovn_pod_count_raw
+              changed_when: false
+              no_log: true
 
-        - name: Clean up OVN check kubeconfig
-          file:
-            path: "/tmp/.ovn-check-kubeconfig-{{ cluster_name }}"
-            state: absent
-          no_log: true
-          when: cluster_kubeconfig_raw.rc == 0 and cluster_kubeconfig_raw.stdout | length > 0
-
-        - name: Assert OVN-Kubernetes is not running
-          assert:
-            that:
-              - ovn_pod_count_raw.stdout_lines | default([]) | length == 0
-            fail_msg: "FAIL: OVN-Kubernetes pods found — default CNI is still running"
-            success_msg: "PASS: No OVN-Kubernetes pods — default CNI is not installed"
-          when: ovn_pod_count_raw is defined and ovn_pod_count_raw.rc is defined and ovn_pod_count_raw.rc == 0
+            - name: Assert OVN-Kubernetes is not running
+              assert:
+                that:
+                  - ovn_pod_count_raw.stdout_lines | default([]) | length == 0
+                fail_msg: "FAIL: OVN-Kubernetes pods found — default CNI is still running"
+                success_msg: "PASS: No OVN-Kubernetes pods — default CNI is not installed"
+          always:
+            - name: Clean up OVN check kubeconfig
+              file:
+                path: "/tmp/.ovn-check-kubeconfig-{{ cluster_name }}"
+                state: absent
+              no_log: true
 
         - name: Validate cni_provider format
           assert:
@@ -351,57 +349,48 @@
             fail_msg: "FAIL: cni_provider contains invalid characters"
           when: cni_provider is defined and cni_provider | length > 0
 
-        - name: Write temporary kubeconfig for CNI check
-          copy:
-            content: "{{ cluster_kubeconfig_raw.stdout }}"
-            dest: "/tmp/.cni-check-kubeconfig-{{ cluster_name }}"
-            mode: "0600"
-          no_log: true
+        - name: Custom CNI pod check
           when:
             - cluster_kubeconfig_raw.rc == 0 and cluster_kubeconfig_raw.stdout | length > 0
             - cni_provider is defined and cni_provider | length > 0
+          block:
+            - name: Write temporary kubeconfig for CNI check
+              copy:
+                content: "{{ cluster_kubeconfig_raw.stdout }}"
+                dest: "/tmp/.cni-check-kubeconfig-{{ cluster_name }}"
+                mode: "0600"
+              no_log: true
 
-        - name: Check for custom CNI pods (if cni_provider specified)
-          command:
-            argv:
-              - oc
-              - --kubeconfig=/tmp/.cni-check-kubeconfig-{{ cluster_name }}
-              - get
-              - pods
-              - -n
-              - "{{ cni_provider }}"
-              - --no-headers
-          register: custom_cni_pod_count_raw
-          failed_when: false
-          changed_when: false
-          no_log: true
-          when:
-            - cluster_kubeconfig_raw.rc == 0 and cluster_kubeconfig_raw.stdout | length > 0
-            - cni_provider is defined and cni_provider | length > 0
+            - name: Check for custom CNI pods (if cni_provider specified)
+              command:
+                argv:
+                  - oc
+                  - --kubeconfig=/tmp/.cni-check-kubeconfig-{{ cluster_name }}
+                  - get
+                  - pods
+                  - -n
+                  - "{{ cni_provider }}"
+                  - --no-headers
+              register: custom_cni_pod_count_raw
+              changed_when: false
+              no_log: true
 
-        - name: Count custom CNI pods
-          set_fact:
-            custom_cni_pod_count: "{{ custom_cni_pod_count_raw.stdout_lines | default([]) | length }}"
-          when:
-            - custom_cni_pod_count_raw is defined
-            - cni_provider is defined and cni_provider | length > 0
+            - name: Count custom CNI pods
+              set_fact:
+                custom_cni_pod_count: "{{ custom_cni_pod_count_raw.stdout_lines | default([]) | length }}"
 
-        - name: Clean up temporary kubeconfig
-          file:
-            path: "/tmp/.cni-check-kubeconfig-{{ cluster_name }}"
-            state: absent
-          no_log: true
-          when: cni_provider is defined and cni_provider | length > 0
-
-        - name: Assert custom CNI pods are running
-          assert:
-            that:
-              - custom_cni_pod_count | default(0) | int > 0
-            fail_msg: "FAIL: No {{ cni_provider }} pods found — custom CNI not installed"
-            success_msg: "PASS: {{ cni_provider }} pods running ({{ custom_cni_pod_count }} pods)"
-          when:
-            - custom_cni_pod_count is defined
-            - cni_provider is defined and cni_provider | length > 0
+            - name: Assert custom CNI pods are running
+              assert:
+                that:
+                  - custom_cni_pod_count | default(0) | int > 0
+                fail_msg: "FAIL: No {{ cni_provider }} pods found — custom CNI not installed"
+                success_msg: "PASS: {{ cni_provider }} pods running ({{ custom_cni_pod_count }} pods)"
+          always:
+            - name: Clean up CNI check kubeconfig
+              file:
+                path: "/tmp/.cni-check-kubeconfig-{{ cluster_name }}"
+                state: absent
+              no_log: true
 
         - set_fact:
             features_passed: "{{ features_passed | int + 1 }}"
