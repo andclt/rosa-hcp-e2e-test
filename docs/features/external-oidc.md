@@ -17,8 +17,10 @@
 ## Description
 
 Enables external OIDC authentication on the cluster. Sets
-`enableExternalAuthProviders: true` and configures the `externalAuthProviders`
-array with issuer URL, audiences, and claim mappings.
+`enableExternalAuthProviders: true` on the ROSAControlPlane. When
+`oidc_issuer_url` is also provided, configures the `externalAuthProviders`
+array with issuer URL, audiences, and claim mappings. Without an issuer URL,
+only the boolean flag is set.
 
 Required for break-glass credential operations.
 
@@ -86,6 +88,8 @@ curl -s https://<issuer_url>/.well-known/openid-configuration
 
 Asserts:
 - `.external_auth_config.enabled` is true (via OCM)
+
+When `oidc_issuer_url` was provided at provision time, also asserts:
 - OIDC issuer URL returns HTTP 200 with valid discovery document
 - Audiences array is non-empty
 - Claim mappings (username claim) are configured
@@ -114,8 +118,27 @@ Asserts:
 | `test_external_oidc_rejected_on_418` | `tests/test_feature_manager.py` | Version gate rejects 4.18 |
 | `test_external_oidc_valid_on_419` | `tests/test_feature_manager.py` | Version gate accepts 4.19+ |
 
+## Live Testing
+
+Verified on 2026-07-08 by provisioning a ROSA HCP 4.22.3 cluster with
+`--feature external-oidc` via CAPA.
+
+**Environment:**
+- Hub cluster: ACM/MCE on VMware (qe6)
+- ROSA HCP version: 4.22.3
+- Region: us-west-2
+- Provisioned via: `./run-test-suite.py 20-rosa-hcp-provision --feature external-oidc -e openshift_version=4.22.3 -e name_prefix=bg70`
+
+**Results:**
+- `enableExternalAuthProviders: true` confirmed in ROSAControlPlane spec
+- Cluster reached `ready` state in 15 minutes
+- Standard kubeconfig secret absent (expected — no `kubeadmin` on external-auth clusters)
+- Bootstrap kubeconfig secret present
+- Break-glass credential creation succeeded against the provisioned cluster
+  (see [break-glass live testing](break-glass-credentials.md#live-testing))
+
 ## Related
 
 - [Automated Feature Verification](automated-feature-verification.md)
-- Break-Glass Credentials (depends on this feature — see PR #70)
+- [Break-Glass Credentials](break-glass-credentials.md) (depends on this feature)
 - Feature Group: `day1-networking`

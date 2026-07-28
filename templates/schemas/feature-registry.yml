@@ -26,6 +26,7 @@ var_map:
   no_cni: no_cni
   proxy_enabled: http_proxy
   external_oidc: external_oidc
+  break_glass_credentials: break_glass_credentials
   image_registry: image_registry_config
   parallel_upgrade: parallel_node_upgrade
   user_agent: user_agent
@@ -41,6 +42,7 @@ cli_aliases:
   private: private_network
   no-cni: no_cni
   external-oidc: external_oidc
+  break-glass: break_glass_credentials
   etcd-kms: etcd_kms
   proxy: proxy_enabled
   tags: additional_tags
@@ -60,13 +62,14 @@ cli_aliases:
 
 # Features valid for --feature CLI flag (Day1 creation features).
 # Only features with working template conditionals are listed here.
-# byon: requires template changes to skip ROSANetwork and accept manual subnets
 # instance_type: template uses machine_pool.instance_type, not settable via flat extra var
 # proxy_enabled: N/A priority per test matrix
 cli_features:
   - private_network
+  - byon
   - no_cni
   - external_oidc
+  - break_glass_credentials
   - etcd_kms
   - additional_tags
   - domain_prefix
@@ -86,6 +89,8 @@ cli_features:
 dependencies:
   byon:
     - private_network
+  break_glass_credentials:
+    - external_oidc
   fips:
     - etcd_kms
 
@@ -137,7 +142,7 @@ suites:
     features:
       - id: private_network
         name: Private Network
-        description: Enable private cluster networking (no public API endpoint)
+        description: Enable private cluster networking with private subnets only (no public API endpoint). Auto-extracts private subnets from ROSANetwork or accepts user-provided subnet IDs.
         type: boolean
         mutable: false
         applies_to: [create]
@@ -147,12 +152,13 @@ suites:
 
       - id: byon
         name: Bring Your Own Network (BYON)
-        description: Use pre-existing VPC and subnets instead of auto-created ones
+        description: Use pre-existing VPC and subnets instead of auto-created ROSANetwork. Requires subnet IDs via -e byon_subnet_ids=[...] and availability zones via -e byon_availability_zones=[...]
         type: boolean
         mutable: false
         applies_to: [create]
         default: false
-        k8s_field: ".spec.network"
+        requires_input: true
+        k8s_field: ".spec.subnets"
         resource: ROSAControlPlane
 
       - id: sts
@@ -216,6 +222,18 @@ suites:
         k8s_field: ".spec.enableExternalAuthProviders"
         resource: ROSAControlPlane
         min_version: "4.19"
+
+      - id: break_glass_credentials
+        name: Break Glass Credentials
+        description: Validate OCM break-glass credential create/list for external-auth clusters (diagnoses 403 Forbidden)
+        type: action
+        mutable: false
+        applies_to: [verify]
+        default: null
+        k8s_field: ".spec.externalAuthProviders"
+        resource: ROSAControlPlane
+        min_version: "4.19"
+        playbook: playbooks/verify_break_glass_credentials.yml
 
       - id: security_groups
         name: Additional Security Groups
