@@ -16,7 +16,7 @@
 # Usage:
 #   This task is NOT auto-run during provisioning. Include it directly:
 #     ansible-playbook -i localhost, -c local your-playbook.yml \
-#       -e cluster_name=<name> -e cni_provider=cilium -e cilium_version=1.16.5
+#       -e cluster_name=<name> -e cni_provider=cilium -e cilium_version=1.19.6
 #
 # Status: EXPERIMENTAL — not validated against live ROSA HCP clusters.
 #         Cilium compatibility with ROSA HCP may vary by version.
@@ -42,7 +42,7 @@
       - secret
       - "{{ cluster_name }}-kubeconfig"
       - -n
-      - "{{ rosa_hcp_namespace }}"
+      - "{{ rosa_hcp_namespace | default('ns-rosa-hcp') }}"
       - -o
       - jsonpath={.data.kubeconfig}
   register: cilium_kubeconfig_b64

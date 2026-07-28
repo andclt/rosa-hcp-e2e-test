@@ -83,7 +83,7 @@ Run with:
 
 ```bash
 ansible-playbook your-playbook.yml \
-  -e cluster_name=<name> -e cni_provider=cilium -e cilium_version=1.16.5
+  -e cluster_name=<name> -e cni_provider=cilium -e cilium_version=1.19.6
 ```
 
 This installs Cilium via Helm with OpenShift-compatible settings using
