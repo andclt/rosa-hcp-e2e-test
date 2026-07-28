@@ -16,9 +16,9 @@
       set_fact:
         aws_access_key_id: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') | default(AWS_ACCESS_KEY_ID, true) }}"
         aws_secret_access_key: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') | default(AWS_SECRET_ACCESS_KEY, true) }}"
-        aws_region: "{{ lookup('env', 'AWS_REGION') | default('us-east-1', true) }}"
-        quay_username: "{{ lookup('env', 'QUAY_USER') | default('', true) }}"
-        quay_password: "{{ lookup('env', 'QUAY_PASS') | default('', true) }}"
+        aws_region: "{{ lookup('env', 'AWS_REGION') | default(AWS_REGION | default('us-east-1', true), true) }}"
+        quay_username: "{{ lookup('env', 'QUAY_USER') | default(QUAY_USER | default('', true), true) }}"
+        quay_password: "{{ lookup('env', 'QUAY_PASS') | default(QUAY_PASS | default('', true), true) }}"
       no_log: true
 
     - name: Prepare ansible runner host
@@ -44,9 +44,12 @@
       shell: |
         oc create secret docker-registry capa-manager-pull-credentials \
           --docker-server=quay.io \
-          --docker-username="{{ quay_username }}" \
-          --docker-password="{{ quay_password }}" \
+          --docker-username="$QUAY_USER" \
+          --docker-password="$QUAY_PASS" \
           -n capa-system --dry-run=client -o yaml | oc apply -f -
+      environment:
+        QUAY_USER: "{{ quay_username }}"
+        QUAY_PASS: "{{ quay_password }}"
       when: quay_username != '' and quay_password != ''
       no_log: true
 
