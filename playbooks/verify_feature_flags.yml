@@ -327,6 +327,7 @@
                   - --no-headers
               register: ovn_pod_count_raw
               changed_when: false
+              failed_when: false
               no_log: true
 
             - name: Assert OVN-Kubernetes is not running
@@ -373,6 +374,7 @@
                   - --no-headers
               register: custom_cni_pod_count_raw
               changed_when: false
+              failed_when: false
               no_log: true
 
             - name: Count custom CNI pods
