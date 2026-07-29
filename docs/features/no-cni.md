@@ -67,24 +67,6 @@ Asserts:
 - No OVN-Kubernetes pods running on the provisioned cluster (`openshift-ovn-kubernetes` namespace is empty)
 - If `cni_provider` is set (e.g., `cilium`), verifies custom CNI pods are running in that namespace
 
-## Post-Provision CNI Installation (Experimental)
-
-After provisioning with `--feature no-cni`, the cluster has no networking.
-An experimental Cilium install task is available:
-
-```bash
-ansible-playbook -i localhost, -c local playbooks/install_cni.yml \
-  -e cluster_name=<name> -e cni_provider=cilium
-```
-
-This uses `tasks/install_cni_cilium.yml` which installs Cilium via Helm with
-OpenShift-compatible settings. **Status: experimental** — not validated against
-live ROSA HCP clusters. Cilium compatibility may vary by version.
-
-Supported variables:
-- `cilium_version`: Helm chart version (default: `1.16.5`)
-- `cilium_namespace`: Install namespace (default: `cilium`)
-
 ## Test Coverage
 
 | Test | File | Description |
