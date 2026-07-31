@@ -24,7 +24,7 @@ OCM_CLIENT_SECRET: ""                  # OCM client secret
 
 # OpenShift Version (optional overrides)
 # openshift_version: "4.22"            # Major.minor version (default: 4.22)
-# channel_group: "stable"              # Version channel: stable, nightly, candidate (default: stable)
+# channel_group: "stable"              # stable (prod) or nightly (staging — no stable HCP versions enabled)
 
 # MCE Configuration
 MCE_NAMESPACE: "multicluster-engine"   # MCE namespace (default)

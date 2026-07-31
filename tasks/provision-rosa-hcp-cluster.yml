@@ -6,7 +6,7 @@
     automation_path: "{{ AUTOMATION_PATH | default(playbook_dir) }}"
     ocm_client_id: "{{ OCM_CLIENT_ID }}"
     ocm_client_secret: "{{ OCM_CLIENT_SECRET }}"
-    ocm_api_url: "{{ OCM_API_URL | default('https://api.stage.openshift.com') }}"
+    ocm_api_url: "{{ OCM_API_URL | default('https://api.stage.openshift.com', true) }}"
 
 - name: Set cluster file path
   set_fact:

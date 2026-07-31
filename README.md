@@ -77,7 +77,7 @@ OCM_API_URL: "https://api.openshift.com"       # or https://api.stage.openshift.
 OCM_CLIENT_ID: "your-ocm-client-id"
 OCM_CLIENT_SECRET: "your-ocm-client-secret"
 # openshift_version: "4.22"                    # optional, default: 4.22
-# channel_group: "stable"                      # optional: stable, nightly, candidate
+# channel_group: "stable"                      # stable (prod) or nightly (staging)
 ```
 
 3. Authenticate to your OpenShift cluster:
