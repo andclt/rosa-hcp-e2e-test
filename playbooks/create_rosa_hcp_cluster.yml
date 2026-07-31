@@ -124,14 +124,22 @@
         domain_prefix: "test-{{ 99999 | random }}"
       when: domain_prefix is not defined
 
-    - name: Set default region and channel
+    - name: Set default region
       set_fact:
         aws_region: "{{ AWS_REGION | default('us-west-2') }}"
+      when: aws_region is not defined
+
+    - name: Set default channel group
+      set_fact:
         channel_group: "stable"
+      when: channel_group is not defined
+
+    - name: Set default network and tags
+      set_fact:
         private_network: false
         additional_tags:
           automation-type: "capa_automation"
-      when: aws_region is not defined
+      when: private_network is not defined
 
     - name: Set derived values
       set_fact:
