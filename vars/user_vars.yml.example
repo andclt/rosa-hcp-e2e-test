@@ -13,12 +13,18 @@ OCP_HUB_CLUSTER_PASSWORD: ""           # OpenShift login password
 
 # AWS Credentials
 AWS_REGION: "us-west-2"                # Default AWS region
-AWS_ACCESS_KEY_ID: ""                  # AWS access key
+AWS_ACCOUNT_ID: ""                     # AWS account ID
+AWS_ACCESS_KEY_ID: ""                  # AWS access key (permanent, not STS)
 AWS_SECRET_ACCESS_KEY: ""              # AWS secret key
 
 # OpenShift Cluster Manager (OCM) Credentials
+OCM_API_URL: ""                        # e.g., https://api.openshift.com (prod) or https://api.stage.openshift.com (staging)
 OCM_CLIENT_ID: ""                      # OCM client ID
 OCM_CLIENT_SECRET: ""                  # OCM client secret
+
+# OpenShift Version (optional overrides)
+# openshift_version: "4.22"            # Major.minor version (default: 4.22)
+# channel_group: "stable"              # Version channel: stable, nightly, candidate (default: stable)
 
 # MCE Configuration
 MCE_NAMESPACE: "multicluster-engine"   # MCE namespace (default)

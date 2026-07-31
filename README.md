@@ -70,11 +70,14 @@ OCP_HUB_API_URL: "https://api.your-cluster.com:6443"
 OCP_HUB_CLUSTER_USER: "kubeadmin"
 OCP_HUB_CLUSTER_PASSWORD: "your-password"
 AWS_REGION: "us-west-2"
+AWS_ACCOUNT_ID: "your-aws-account-id"
 AWS_ACCESS_KEY_ID: "your-aws-key"
 AWS_SECRET_ACCESS_KEY: "your-aws-secret"
+OCM_API_URL: "https://api.openshift.com"       # or https://api.stage.openshift.com for staging
 OCM_CLIENT_ID: "your-ocm-client-id"
 OCM_CLIENT_SECRET: "your-ocm-client-secret"
-MCE_NAMESPACE: "multicluster-engine"
+# openshift_version: "4.22"                    # optional, default: 4.22
+# channel_group: "stable"                      # optional: stable, nightly, candidate
 ```
 
 3. Authenticate to your OpenShift cluster:
