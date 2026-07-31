@@ -6,13 +6,23 @@
   delay: "{{ 30 if delay is undefined else delay|int }}"
   ignore_errors: true
 
+- name: Get ROSA Control Plane status on failure
+  shell: >
+    oc get rosacontrolplane {{ cluster_name }} -n {{ rosa_hcp_namespace | default('ns-rosa-hcp') }}
+    -o json | jq -r '(.status.conditions // [])[] | "\(.type): \(.status) - \(.message // .reason // "n/a")"'
+  register: rcp_conditions
+  ignore_errors: true
+  when: not (rcp_status.stdout | bool)
+
 - name: Fail if ROSA Control Plane did not become ready
   fail:
     msg: |
       ROSA HCP cluster did not become ready within the timeout period.
 
-      Check cluster status:
-      oc get rosacontrolplane {{ cluster_name }} -n {{ rosa_hcp_namespace | default('ns-rosa-hcp') }}
+      Control Plane conditions:
+      {{ rcp_conditions.stdout | default('Unable to fetch conditions', true) }}
+
+      For full details:
       oc describe rosacontrolplane {{ cluster_name }} -n {{ rosa_hcp_namespace | default('ns-rosa-hcp') }}
   when: not (rcp_status.stdout | bool)
 
