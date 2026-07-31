@@ -9,7 +9,7 @@
 - name: Get ROSA Control Plane status on failure
   shell: >
     oc get rosacontrolplane {{ cluster_name }} -n {{ rosa_hcp_namespace | default('ns-rosa-hcp') }}
-    -o json | jq -r '.status.conditions[] | "\(.type): \(.status) - \(.message // .reason // "n/a")"'
+    -o json | jq -r '(.status.conditions // [])[] | "\(.type): \(.status) - \(.message // .reason // "n/a")"'
   register: rcp_conditions
   ignore_errors: true
   when: not (rcp_status.stdout | bool)
@@ -20,7 +20,7 @@
       ROSA HCP cluster did not become ready within the timeout period.
 
       Control Plane conditions:
-      {{ rcp_conditions.stdout | default('Unable to fetch conditions') }}
+      {{ rcp_conditions.stdout | default('Unable to fetch conditions', true) }}
 
       For full details:
       oc describe rosacontrolplane {{ cluster_name }} -n {{ rosa_hcp_namespace | default('ns-rosa-hcp') }}
