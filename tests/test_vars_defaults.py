@@ -88,9 +88,10 @@ def test_required_capi_installation_keys():
 def test_supported_versions_contains_openshift_version():
     data = _load_vars()
     openshift_version = data["openshift_version"]
+    major_minor = ".".join(openshift_version.split(".")[:2])
     supported = data["supported_versions"]
-    assert openshift_version in supported, \
-        f"openshift_version '{openshift_version}' not in supported_versions {supported}"
+    assert major_minor in supported, \
+        f"openshift_version '{openshift_version}' (major.minor: {major_minor}) not in supported_versions {supported}"
 
 
 def test_supported_versions_is_list():
