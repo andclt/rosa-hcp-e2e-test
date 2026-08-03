@@ -65,7 +65,7 @@
     - name: Set AWS credentials
       set_fact:
         aws_account_id: "{{ lookup('env', 'AWS_ACCOUNT_ID') | default(AWS_ACCOUNT_ID, true) }}"
-        aws_region: "{{ lookup('env', 'AWS_REGION') | default(AWS_REGION | default('us-east-1'), true) }}"
+        aws_region: "{{ lookup('env', 'AWS_REGION') | default(AWS_REGION | default('us-west-2'), true) }}"
         AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') | default(AWS_ACCESS_KEY_ID | default(''), true) }}"
         AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') | default(AWS_SECRET_ACCESS_KEY | default(''), true) }}"
       no_log: true
@@ -124,14 +124,26 @@
         domain_prefix: "test-{{ 99999 | random }}"
       when: domain_prefix is not defined
 
-    - name: Set default region and channel
+    - name: Set default region
       set_fact:
         aws_region: "{{ AWS_REGION | default('us-west-2') }}"
+      when: aws_region is not defined
+
+    - name: Set default channel group
+      set_fact:
         channel_group: "stable"
+      when: channel_group is not defined
+
+    - name: Set default network privacy
+      set_fact:
         private_network: false
+      when: private_network is not defined
+
+    - name: Set default additional tags
+      set_fact:
         additional_tags:
           automation-type: "capa_automation"
-      when: aws_region is not defined
+      when: additional_tags is not defined
 
     - name: Set derived values
       set_fact:
