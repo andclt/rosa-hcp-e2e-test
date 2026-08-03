@@ -69,6 +69,6 @@
           Using openshift_version as-is: {{ openshift_version }}.
           Error: {{ ansible_failed_result.msg | default('unknown') | regex_replace('Bearer [^ ]+', 'Bearer ***') }}
 
-    - name: Fall back to raw openshift_version
+    - name: Fall back to normalized openshift_version
       set_fact:
-        resolved_openshift_version: "{{ openshift_version }}"
+        resolved_openshift_version: "{{ openshift_version ~ '.0' if openshift_version.split('.') | length < 3 else openshift_version }}"

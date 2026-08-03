@@ -204,6 +204,8 @@
 
     - name: Create RosaRoleConfig resource
       include_tasks: create_rosa_role_config.yml
+      vars:
+        rcp_version: "{{ resolved_openshift_version | default(openshift_version) }}"
 
     - name: Wait for RosaRoleConfig to be ready
       include_tasks: wait_for_rosa_roles.yml
