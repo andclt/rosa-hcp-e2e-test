@@ -134,12 +134,16 @@
         channel_group: "stable"
       when: channel_group is not defined
 
-    - name: Set default network and tags
+    - name: Set default network privacy
       set_fact:
         private_network: false
+      when: private_network is not defined
+
+    - name: Set default additional tags
+      set_fact:
         additional_tags:
           automation-type: "capa_automation"
-      when: private_network is not defined
+      when: additional_tags is not defined
 
     - name: Set derived values
       set_fact:
