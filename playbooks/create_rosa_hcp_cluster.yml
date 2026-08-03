@@ -103,7 +103,7 @@
 
     - name: Set default openshift version
       set_fact:
-        openshift_version: "4.19.10"
+        openshift_version: "4.22"
       when: openshift_version is not defined
 
     - name: Set default network settings

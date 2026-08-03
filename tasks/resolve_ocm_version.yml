@@ -1,0 +1,72 @@
+---
+- name: Skip OCM version resolution if already a pre-release version
+  set_fact:
+    resolved_openshift_version: "{{ openshift_version }}"
+  when: "'-' in openshift_version"
+
+- name: Resolve latest available HCP version from OCM
+  when: "'-' not in openshift_version"
+  block:
+    - name: Set OCM API URL for version resolution
+      set_fact:
+        _ocm_api_url: "{{ ocm_client_api_url | default(lookup('env', 'OCM_API_URL')) | default('https://api.stage.openshift.com', true) }}"
+        _ocm_client_id: "{{ ocm_client_id | default(lookup('env', 'OCM_CLIENT_ID')) }}"
+        _ocm_client_secret: "{{ ocm_client_secret | default(lookup('env', 'OCM_CLIENT_SECRET')) }}"
+      no_log: true
+
+    - name: Get OCM bearer token for version resolution
+      uri:
+        url: "https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          grant_type: client_credentials
+          client_id: "{{ _ocm_client_id }}"
+          client_secret: "{{ _ocm_client_secret }}"
+        status_code: 200
+        timeout: 15
+      register: _ocm_version_token
+      no_log: true
+
+    - name: Query OCM for available HCP versions
+      uri:
+        url: "{{ _ocm_api_url }}/api/clusters_mgmt/v1/versions?search={{ _version_search | urlencode }}&order={{ 'raw_id desc' | urlencode }}&size=1"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ _ocm_version_token.json.access_token }}"
+          Accept: application/json
+        status_code: 200
+        timeout: 15
+      vars:
+        _version_search: "raw_id like '{{ openshift_version }}%' and rosa_enabled='true' and hosted_control_plane_enabled='true' and enabled='true' and channel_group='{{ channel_group | default('stable') }}'"
+      register: _ocm_versions_result
+
+    - name: Fail if no HCP versions available
+      fail:
+        msg: >-
+          No HCP-enabled versions found matching '{{ openshift_version }}'
+          in channel group '{{ channel_group | default('stable') }}'
+          on {{ _ocm_api_url }}.
+          Check available versions with:
+          ocm get /api/clusters_mgmt/v1/versions --parameter search="raw_id like '{{ openshift_version }}%' and hosted_control_plane_enabled='true' and enabled='true' and channel_group='{{ channel_group | default('stable') }}'"
+      when: _ocm_versions_result.json.total == 0
+
+    - name: Set resolved OpenShift version
+      set_fact:
+        resolved_openshift_version: "{{ _ocm_versions_result.json.items[0].raw_id }}"
+
+    - name: Display resolved version
+      debug:
+        msg: "Resolved OpenShift version: {{ openshift_version }} → {{ resolved_openshift_version }} (channel: {{ channel_group | default('stable') }})"
+
+  rescue:
+    - name: Warn about OCM version resolution failure
+      debug:
+        msg: >-
+          WARNING: Could not resolve version from OCM API.
+          Using openshift_version as-is: {{ openshift_version }}.
+          Error: {{ ansible_failed_result.msg | default('unknown') }}
+
+    - name: Fall back to raw openshift_version
+      set_fact:
+        resolved_openshift_version: "{{ openshift_version }}"
