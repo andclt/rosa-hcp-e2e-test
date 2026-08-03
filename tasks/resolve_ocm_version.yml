@@ -62,13 +62,10 @@
         msg: "Resolved OpenShift version: {{ openshift_version }} → {{ resolved_openshift_version }} (channel: {{ channel_group | default('stable') }})"
 
   rescue:
-    - name: Warn about OCM version resolution failure
-      debug:
+    - name: Fail on OCM version resolution error
+      fail:
         msg: >-
-          WARNING: Could not resolve version from OCM API.
-          Using openshift_version as-is: {{ openshift_version }}.
-          Error: {{ ansible_failed_result.msg | default('unknown') | regex_replace('Bearer [^ ]+', 'Bearer ***') }}
-
-    - name: Fall back to raw openshift_version
-      set_fact:
-        resolved_openshift_version: "{{ openshift_version }}"
+          Could not resolve OpenShift version from OCM API.
+          Input: {{ openshift_version }}, channel_group: {{ channel_group | default('stable') }}.
+          Error: {{ ansible_failed_result.msg | default('unknown') | regex_replace('Bearer [^ ]+', 'Bearer ***') }}.
+          Verify OCM credentials and connectivity, or pass a full version (e.g. 4.22.6) as openshift_version.
