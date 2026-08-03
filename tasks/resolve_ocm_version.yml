@@ -40,6 +40,7 @@
       vars:
         _version_search: "raw_id like '{{ openshift_version }}%' and rosa_enabled='true' and hosted_control_plane_enabled='true' and enabled='true' and channel_group='{{ channel_group | default('stable') }}'"
       register: _ocm_versions_result
+      no_log: true
 
     - name: Fail if no HCP versions available
       fail:
@@ -65,7 +66,7 @@
         msg: >-
           WARNING: Could not resolve version from OCM API.
           Using openshift_version as-is: {{ openshift_version }}.
-          Error: {{ ansible_failed_result.msg | default('unknown') }}
+          Error: {{ ansible_failed_result.msg | default('unknown') | regex_replace('Bearer [^ ]+', 'Bearer ***') }}
 
     - name: Fall back to raw openshift_version
       set_fact:
