@@ -55,7 +55,7 @@
 
     - name: Set resolved OpenShift version
       set_fact:
-        resolved_openshift_version: "{{ _ocm_versions_result.json.items[0].raw_id }}"
+        resolved_openshift_version: "{{ _ocm_versions_result.json['items'][0].raw_id }}"
 
     - name: Display resolved version
       debug:
