@@ -619,7 +619,6 @@ pipeline {
                               -e OCP_HUB_CLUSTER_USER="${OCP_HUB_CLUSTER_USER}" \
                               -e MCE_NAMESPACE="${MCE_NAMESPACE}"
                         '''
-                    }
                         archiveArtifacts artifacts: 'rosa-hcp-e2e-test/test-results/**/*.xml', allowEmptyArchive: true, followSymlinks: false, fingerprint: true
                     }
                     catch (ex) {
