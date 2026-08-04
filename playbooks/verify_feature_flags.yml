@@ -542,6 +542,7 @@
             --output json
           register: aws_byon_subnets_raw
           changed_when: false
+          no_log: true
 
         - name: Assert all BYON subnets exist in AWS
           assert:
