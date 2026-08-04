@@ -21,7 +21,7 @@ var_map:
   etcd_kms: etcd_encryption_kms_arn
   domain_prefix: domain_prefix
   channel_group: channel_group
-  instance_type: instance_type
+  # instance_type: not in var_map — template uses machine_pool.instance_type (nested), not a flat extra var
   disk_size: root_volume_size
   no_cni: no_cni
   proxy_enabled: http_proxy
@@ -48,7 +48,6 @@ cli_aliases:
   tags: additional_tags
   domain: domain_prefix
   channel-group: channel_group
-  instance: instance_type
   disk-size: disk_size
   azs: availability_zones
   byon-vpc: byon
