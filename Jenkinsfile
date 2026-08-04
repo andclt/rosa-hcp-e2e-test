@@ -193,7 +193,7 @@ pipeline {
             when {
                 allOf {
                     expression { currentBuild.result != 'FAILURE' }
-                    expression { params.CLUSTER_FEATURES != '' || params.FEATURE_GROUP != '' }
+                    expression { params.CLUSTER_FEATURES?.trim() || params.FEATURE_GROUP?.trim() }
                 }
             }
             environment {
@@ -320,7 +320,7 @@ pipeline {
             when {
                 allOf {
                     expression { currentBuild.result != 'FAILURE' }
-                    expression { params.CLUSTER_FEATURES != '' || params.FEATURE_GROUP != '' }
+                    expression { params.CLUSTER_FEATURES?.trim() || params.FEATURE_GROUP?.trim() }
                 }
             }
             environment {
@@ -619,6 +619,8 @@ pipeline {
                               -e OCP_HUB_CLUSTER_USER="${OCP_HUB_CLUSTER_USER}" \
                               -e MCE_NAMESPACE="${MCE_NAMESPACE}"
                         '''
+                    }
+                        archiveArtifacts artifacts: 'rosa-hcp-e2e-test/test-results/**/*.xml', allowEmptyArchive: true, followSymlinks: false, fingerprint: true
                     }
                     catch (ex) {
                         echo "WARNING: Failed to restore HyperShift — cluster may need manual intervention"

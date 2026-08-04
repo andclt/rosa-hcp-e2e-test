@@ -61,8 +61,18 @@ cli_aliases:
 
 # Features valid for --feature CLI flag (Day1 creation features).
 # Only features with working template conditionals are listed here.
-# instance_type: template uses machine_pool.instance_type, not settable via flat extra var
-# proxy_enabled: N/A priority per test matrix
+#
+# Excluded from CLI (with reason):
+# instance_type: template uses machine_pool.instance_type (nested), not settable via flat extra var
+# proxy_enabled: requires http_proxy_url/https_proxy_url/no_proxy inputs not wired through feature manager
+# sts: always enabled, not user-toggleable
+# identity_provider: Day2 feature, configured post-creation
+# machine_pool_autoscaling: managed via separate machinepool suites (27/28)
+# control_plane_upgrade: Day2 operation with its own suite (25)
+# machine_pool_upgrade: Day2 operation with its own suite (26)
+# node_taints: Day2 feature, applied post-creation
+# node_labels: Day2 feature, applied post-creation
+# cluster_delete: destructive action with its own suite (30)
 cli_features:
   - private_network
   - byon
