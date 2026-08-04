@@ -193,7 +193,7 @@ pipeline {
             when {
                 allOf {
                     expression { currentBuild.result != 'FAILURE' }
-                    expression { params.CLUSTER_FEATURES != '' || params.FEATURE_GROUP != '' }
+                    expression { params.CLUSTER_FEATURES?.trim() || params.FEATURE_GROUP?.trim() }
                 }
             }
             environment {
@@ -320,7 +320,7 @@ pipeline {
             when {
                 allOf {
                     expression { currentBuild.result != 'FAILURE' }
-                    expression { params.CLUSTER_FEATURES != '' || params.FEATURE_GROUP != '' }
+                    expression { params.CLUSTER_FEATURES?.trim() || params.FEATURE_GROUP?.trim() }
                 }
             }
             environment {
@@ -330,6 +330,8 @@ pipeline {
                 MCE_NAMESPACE = "${params.MCE_NAMESPACE}"
                 CLUSTER_FEATURES = "${params.CLUSTER_FEATURES}"
                 FEATURE_GROUP = "${params.FEATURE_GROUP}"
+                EXTRA_FEATURE_VARS = "${params.EXTRA_FEATURE_VARS}"
+                ETCD_KMS_ARN = "${params.ETCD_KMS_ARN}"
             }
             steps {
                 script {
@@ -337,6 +339,7 @@ pipeline {
                         withCredentials([
                             string(credentialsId: 'CAPI_AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
                             string(credentialsId: 'CAPI_AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
+                            string(credentialsId: 'CAPI_AWS_ACCOUNT_ID', variable: 'AWS_ACCOUNT_ID'),
                             string(credentialsId: 'CAPI_OCM_CLIENT_ID', variable: 'OCM_CLIENT_ID'),
                             string(credentialsId: 'CAPI_OCM_CLIENT_SECRET', variable: 'OCM_CLIENT_SECRET')
                         ]) {
@@ -354,18 +357,38 @@ pipeline {
                                 if [ -n "${FEATURE_GROUP}" ]; then
                                     GROUP_FLAG="--feature-group ${FEATURE_GROUP}"
                                 fi
+                                # Build extra vars from EXTRA_FEATURE_VARS and ETCD_KMS_ARN
+                                EXTRA_VARS=""
+                                if [ -n "${ETCD_KMS_ARN}" ]; then
+                                    EXTRA_VARS="${EXTRA_VARS} -e etcd_encryption_kms_arn=${ETCD_KMS_ARN}"
+                                fi
+                                if [ -n "${EXTRA_FEATURE_VARS}" ]; then
+                                    for var in ${EXTRA_FEATURE_VARS}; do
+                                        EXTRA_VARS="${EXTRA_VARS} -e \"${var}\""
+                                    done
+                                fi
                                 ./run-test-suite.py 21-verify-feature-flags --format junit -v --ai-agent ${FEATURE_FLAGS} ${GROUP_FLAG} \
                                   -e OCP_HUB_API_URL="${OCP_HUB_API_URL}" \
                                   -e OCP_HUB_CLUSTER_USER="${OCP_HUB_CLUSTER_USER}" \
                                   -e MCE_NAMESPACE="${MCE_NAMESPACE}" \
-                                  -e cluster_name="${NAME_PREFIX}-rosa-hcp"
+                                  -e cluster_name="${NAME_PREFIX}-rosa-hcp" \
+                                  ${EXTRA_VARS}
                             '''
                         }
                         archiveArtifacts artifacts: 'rosa-hcp-e2e-test/test-results/**/*.xml', allowEmptyArchive: true, followSymlinks: false, fingerprint: true
                     }
                     catch (ex) {
-                        echo 'Feature flag verification failed — features may not have been applied correctly'
-                        currentBuild.result = 'UNSTABLE'
+                        def securityFeatures = ['etcd-kms', 'etcd_kms', 'fips', 'security-groups', 'security_groups', 'external-oidc', 'external_oidc', 'private', 'private_network']
+                        def requestedFeatures = (params.CLUSTER_FEATURES ?: '').split(',').collect { it.trim() }
+                        def hasSecurityFeature = requestedFeatures.any { securityFeatures.contains(it) } ||
+                            params.FEATURE_GROUP in ['day1-security', 'day1-networking']
+                        if (hasSecurityFeature) {
+                            echo 'Feature flag verification FAILED for security-critical features — marking build as FAILURE'
+                            currentBuild.result = 'FAILURE'
+                        } else {
+                            echo 'Feature flag verification failed — features may not have been applied correctly'
+                            currentBuild.result = 'UNSTABLE'
+                        }
                     }
                 }
             }
@@ -596,6 +619,7 @@ pipeline {
                               -e OCP_HUB_CLUSTER_USER="${OCP_HUB_CLUSTER_USER}" \
                               -e MCE_NAMESPACE="${MCE_NAMESPACE}"
                         '''
+                        archiveArtifacts artifacts: 'rosa-hcp-e2e-test/test-results/**/*.xml', allowEmptyArchive: true, followSymlinks: false, fingerprint: true
                     }
                     catch (ex) {
                         echo "WARNING: Failed to restore HyperShift — cluster may need manual intervention"
