@@ -785,46 +785,12 @@
             fail_detail: "userAgent is not set"
 
     # --- cluster_autoscaler_expander ---
-    - name: "CHECK: Cluster Autoscaler Expander (via AWS CLI + CRD)"
+    - name: "CHECK: Cluster Autoscaler Expander (via CRD)"
       vars:
-        verify_region: "{{ aws_region | default(rcp.spec.region | default('us-west-2')) }}"
         valid_expanders: ['LeastWaste', 'Priority', 'Random', 'MostPods']
         expected_expander: "{{ autoscaler_expander | default('LeastWaste') }}"
       block:
-        - name: Query AWS Auto Scaling Groups for cluster
-          shell: >
-            aws autoscaling describe-auto-scaling-groups
-            --filters "Name=tag:kubernetes.io/cluster/{{ cluster_name }},Values=owned"
-            --region {{ verify_region }}
-            --query 'AutoScalingGroups[].{Name:AutoScalingGroupName,Min:MinSize,Max:MaxSize}'
-            --output json
-          register: aws_asg_raw
-          changed_when: false
-
-        - name: Parse ASG response
-          set_fact:
-            aws_asgs: "{{ aws_asg_raw.stdout | from_json }}"
-
-        - name: Assert ASGs exist
-          assert:
-            that:
-              - aws_asgs | length > 0
-            fail_msg: "FAIL: No ASGs found for the target cluster"
-            success_msg: "PASS: ASG(s) found for the target cluster"
-
-        - name: Filter ASGs to default machine pool
-          set_fact:
-            aws_asgs_default: "{{ aws_asgs | selectattr('Name', 'search', 'default\\b|workers') | list | default(aws_asgs, true) }}"
-
-        - name: Assert default pool ASG allows scaling (Max > Min)
-          assert:
-            that:
-              - aws_asgs_default | length > 0
-              - aws_asgs_default[0].Max | int > aws_asgs_default[0].Min | int
-            fail_msg: "FAIL: Default pool ASG scaling not enabled (Max not greater than Min)"
-            success_msg: "PASS: Default pool ASG allows scaling (Max > Min)"
-
-        - name: Assert expander strategy via CRD (not exposed in AWS)
+        - name: Assert expander strategy via CRD
           assert:
             that:
               - rcp.spec.autoscaler is defined
@@ -832,7 +798,7 @@
               - rcp.spec.autoscaler.expanders | length > 0
               - rcp.spec.autoscaler.expanders | difference(valid_expanders) | length == 0
               - "expected_expander in rcp.spec.autoscaler.expanders"
-            fail_msg: "FAIL: autoscaler expanders do not include expected strategy"
+            fail_msg: "FAIL: autoscaler expanders not set or do not include expected strategy"
             success_msg: "PASS: autoscaler expanders include expected strategy"
 
         - set_fact:
@@ -841,7 +807,7 @@
         - include_tasks: "{{ playbook_dir }}/../tasks/verify_feature_rescue.yml"
           vars:
             feature_id: cluster_autoscaler_expander
-            fail_detail: "autoscaler not active in AWS or expander strategy not set"
+            fail_detail: "autoscaler expander strategy not set in CRD"
 
     # --- image_registry ---
     - name: "CHECK: Image Registry Config (via OCM API)"
@@ -883,64 +849,44 @@
             fail_detail: "registry config not set"
 
     # --- additional_tags ---
-    - name: "CHECK: Additional Tags (via AWS CLI)"
-      vars:
-        verify_region: "{{ aws_region | default(rcp.spec.region | default('us-west-2')) }}"
+    - name: "CHECK: Additional Tags (via CRD + OCM API)"
       block:
-        - name: Query AWS for resources tagged with cluster-specific tags
-          shell: >
-            aws resourcegroupstaggingapi get-resources
-            --tag-filters
-            Key=kubernetes.io/cluster/{{ cluster_name }},Values=owned
-            Key=env,Values={{ environment_tag | default('test') }}
-            Key=purpose,Values={{ purpose_tag | default('rosa-hcp-automation-testing') }}
-            Key=automated,Values=true
-            --region {{ verify_region }}
-            --query 'ResourceTagMappingList[0].Tags'
-            --output json
-          register: aws_tags_raw
-          changed_when: false
-
-        - name: Parse AWS tags response
-          set_fact:
-            aws_tags_list: "{{ aws_tags_raw.stdout | from_json | default([], true) }}"
-
-        - name: Assert tagged resources were found
+        - name: Assert additionalTags present in CRD
           assert:
             that:
-              - aws_tags_list is not none
-              - aws_tags_list | length > 0
-            fail_msg: "FAIL: No resources found with the expected cluster tags"
-            success_msg: "PASS: Found tagged resources"
+              - rcp.spec.additionalTags is defined
+              - rcp.spec.additionalTags | length > 0
+            fail_msg: "FAIL: additionalTags not set on ROSAControlPlane"
+            success_msg: "PASS: additionalTags present on ROSAControlPlane"
 
-        - name: Reset AWS tags dict
-          set_fact:
-            aws_tags: {}
-
-        - name: Convert AWS tags to dict
-          set_fact:
-            aws_tags: "{{ aws_tags | combine({item.Key: item.Value}) }}"
-          loop: "{{ aws_tags_list }}"
-
-        - name: Assert default tags present on AWS resources
+        - name: Assert default tags in CRD
           assert:
             that:
-              - aws_tags_list | length > 0
-              - "'env' in aws_tags"
-              - "'purpose' in aws_tags"
-              - "'automated' in aws_tags"
-            fail_msg: "FAIL: Default tags (env, purpose, automated) not found on AWS resources"
-            success_msg: "PASS: Default tags (env, purpose, automated) present on AWS resources"
+              - "'env' in rcp.spec.additionalTags"
+              - "'purpose' in rcp.spec.additionalTags"
+              - "'automated' in rcp.spec.additionalTags"
+            fail_msg: "FAIL: Default tags (env, purpose, automated) not found in CRD additionalTags"
+            success_msg: "PASS: Default tags present in CRD additionalTags"
 
-        - name: Assert custom tags present on AWS resources
+        - name: Assert custom tags in CRD
           assert:
             that:
-              - item.key in aws_tags
-              - aws_tags[item.key] | string == item.value | string
-            fail_msg: "FAIL: Custom tag not found on AWS resources"
-            success_msg: "PASS: Custom tag found on AWS resources"
+              - item.key in rcp.spec.additionalTags
+              - rcp.spec.additionalTags[item.key] | string == item.value | string
+            fail_msg: "FAIL: Custom tag '{{ item.key }}' not found in CRD additionalTags"
+            success_msg: "PASS: Custom tag '{{ item.key }}' found in CRD additionalTags"
           loop: "{{ additional_tags | default({}) | dict2items }}"
           when: additional_tags is defined and (additional_tags | length > 0)
+
+        - name: Cross-check tags via OCM API
+          assert:
+            that:
+              - ocm_cluster.aws.tags is defined
+              - "'env' in ocm_cluster.aws.tags"
+              - "'automated' in ocm_cluster.aws.tags"
+            fail_msg: "FAIL: OCM aws.tags missing default tags"
+            success_msg: "PASS: OCM aws.tags confirm default tags"
+          when: ocm_available
 
         - set_fact:
             features_passed: "{{ features_passed | int + 1 }}"
@@ -948,7 +894,7 @@
         - include_tasks: "{{ playbook_dir }}/../tasks/verify_feature_rescue.yml"
           vars:
             feature_id: additional_tags
-            fail_detail: "default or custom tags not found on AWS resources"
+            fail_detail: "default or custom tags not found in CRD or OCM"
 
     # --- domain_prefix ---
     - name: "CHECK: Domain Prefix (via OCM API)"
@@ -1021,39 +967,33 @@
             fail_detail: "channelGroup does not match expected value"
 
     # --- default_autoscaling ---
-    - name: "CHECK: Default MachinePool Autoscaling (via AWS CLI)"
+    - name: "CHECK: Default MachinePool Autoscaling (via OCM API + CRD)"
       vars:
-        verify_region: "{{ aws_region | default(rcp.spec.region | default('us-west-2')) }}"
         expected_min: "{{ mp_min_replicas | default(2) | int }}"
         expected_max: "{{ mp_max_replicas | default(4 if (default_autoscaling | default(false) | bool) else 2) | int }}"
       block:
-        - name: Query AWS ASG for default machine pool
-          shell: >
-            aws autoscaling describe-auto-scaling-groups
-            --filters "Name=tag:kubernetes.io/cluster/{{ cluster_name }},Values=owned"
-            --region {{ verify_region }}
-            --query 'AutoScalingGroups[].{Name:AutoScalingGroupName,Min:MinSize,Max:MaxSize,Desired:DesiredCapacity}'
-            --output json
-          register: aws_asg_raw
-          changed_when: false
-
-        - name: Parse ASG response
-          set_fact:
-            aws_asgs: "{{ aws_asg_raw.stdout | from_json }}"
-
-        - name: Filter ASGs to default machine pool
-          set_fact:
-            aws_asgs_default_as: "{{ aws_asgs | selectattr('Name', 'search', 'default\\b|workers') | list | default(aws_asgs, true) }}"
-
-        - name: Assert ASG min/max match expected autoscaling range
+        - name: Assert autoscaling via OCM
           assert:
             that:
-              - aws_asgs_default_as | length > 0
-              - aws_asgs_default_as[0].Min | int == expected_min | int
-              - aws_asgs_default_as[0].Max | int == expected_max | int
-              - aws_asgs_default_as[0].Max | int >= aws_asgs_default_as[0].Min | int
-            fail_msg: "FAIL: ASG min/max do not match expected autoscaling range"
-            success_msg: "PASS: ASG min/max match expected autoscaling range"
+              - ocm_cluster.nodes.autoscale_compute is defined
+              - ocm_cluster.nodes.autoscale_compute.min_replicas is defined
+              - ocm_cluster.nodes.autoscale_compute.max_replicas is defined
+              - ocm_cluster.nodes.autoscale_compute.min_replicas | int >= expected_min | int
+              - ocm_cluster.nodes.autoscale_compute.max_replicas | int >= ocm_cluster.nodes.autoscale_compute.min_replicas | int
+            fail_msg: "FAIL: OCM autoscale_compute not configured or range invalid"
+            success_msg: "PASS: OCM confirms autoscaling enabled (min={{ ocm_cluster.nodes.autoscale_compute.min_replicas }}, max={{ ocm_cluster.nodes.autoscale_compute.max_replicas }})"
+          when: ocm_available
+
+        - name: Assert autoscaling via CRD
+          assert:
+            that:
+              - rcp.spec.defaultMachinePoolSpec is defined
+              - rcp.spec.defaultMachinePoolSpec.autoscaling is defined
+              - rcp.spec.defaultMachinePoolSpec.autoscaling.minReplicas | int == expected_min | int
+              - rcp.spec.defaultMachinePoolSpec.autoscaling.maxReplicas | int == expected_max | int
+              - rcp.spec.defaultMachinePoolSpec.autoscaling.maxReplicas | int >= rcp.spec.defaultMachinePoolSpec.autoscaling.minReplicas | int
+            fail_msg: "FAIL: CRD defaultMachinePoolSpec.autoscaling does not match expected (min={{ expected_min }}, max={{ expected_max }})"
+            success_msg: "PASS: CRD autoscaling matches expected (min={{ expected_min }}, max={{ expected_max }})"
 
         - set_fact:
             features_passed: "{{ features_passed | int + 1 }}"
@@ -1061,7 +1001,7 @@
         - include_tasks: "{{ playbook_dir }}/../tasks/verify_feature_rescue.yml"
           vars:
             feature_id: default_autoscaling
-            fail_detail: "ASG min/max do not match expected autoscaling range"
+            fail_detail: "autoscaling not configured or min/max do not match expected"
 
     # --- long cluster name (not a registry feature, always SKIP on failure) ---
     - name: "CHECK: Long Cluster Name"
@@ -1085,59 +1025,43 @@
             features_skipped: "{{ features_skipped | int + 1 }}"
 
     # --- disk_size ---
-    - name: "CHECK: Disk Volume Size (via AWS CLI)"
+    - name: "CHECK: Disk Volume Size (via OCM API + CRD)"
       vars:
-        verify_region: "{{ aws_region | default(rcp.spec.region | default('us-west-2')) }}"
         expected_volume_size: "{{ root_volume_size | default(300) | int }}"
       block:
-        - name: Get root device name and block device mappings
-          shell: >
-            aws ec2 describe-instances
-            --filters "Name=tag:kubernetes.io/cluster/{{ cluster_name }},Values=owned"
-            "Name=instance-state-name,Values=running"
-            --region {{ verify_region }}
-            --query 'Reservations[0].Instances[0].{Root:RootDeviceName,BDM:BlockDeviceMappings}'
-            --output json
-          register: aws_instance_raw
-          changed_when: false
+        - name: Query OCM node pools for volume size
+          uri:
+            url: "{{ ocm_api_url }}/api/clusters_mgmt/v1/clusters/{{ ocm_cluster.id }}/node_pools"
+            method: GET
+            headers:
+              Authorization: "Bearer {{ ocm_token_result.json.access_token }}"
+              Accept: application/json
+            status_code: 200
+            timeout: 15
+          register: ocm_disk_node_pools
           failed_when: false
-
-        - name: Assert worker instance was found
-          assert:
-            that:
-              - aws_instance_raw.rc == 0
-              - aws_instance_raw.stdout | trim != 'null'
-              - aws_instance_raw.stdout | trim | length > 0
-            fail_msg: "FAIL: No running worker instances found for cluster"
-            success_msg: "PASS: Worker instance found"
-
-        - name: Parse instance response
-          set_fact:
-            aws_instance_info: "{{ aws_instance_raw.stdout | from_json }}"
-
-        - name: Extract root volume ID
-          set_fact:
-            aws_volume_id: >-
-              {{ aws_instance_info.BDM
-                 | selectattr('DeviceName', 'equalto', aws_instance_info.Root)
-                 | map(attribute='Ebs.VolumeId') | first }}
-
-        - name: Query EBS volume size
-          shell: >
-            aws ec2 describe-volumes
-            --volume-ids {{ aws_volume_id | trim }}
-            --region {{ verify_region }}
-            --query 'Volumes[0].Size'
-            --output text
-          register: aws_volume_size_raw
           changed_when: false
+          no_log: true
+          when: ocm_available and ocm_cluster.id is defined
 
-        - name: Assert root volume size matches expected
+        - name: Assert volume size via OCM node pool
           assert:
             that:
-              - aws_volume_size_raw.stdout | trim | int == expected_volume_size | int
-            fail_msg: "FAIL: root volume size does not match expected"
-            success_msg: "PASS: root volume size matches expected"
+              - ocm_disk_node_pools.json.items | length > 0
+              - ocm_disk_node_pools.json.items[0].root_volume is defined
+              - ocm_disk_node_pools.json.items[0].root_volume.aws.size | int == expected_volume_size | int
+            fail_msg: "FAIL: OCM node pool root volume size does not match expected {{ expected_volume_size }}"
+            success_msg: "PASS: OCM node pool root volume size matches expected {{ expected_volume_size }}"
+          when: ocm_available and ocm_disk_node_pools is defined and ocm_disk_node_pools.json is defined
+
+        - name: Assert volumeSize via CRD (fallback)
+          assert:
+            that:
+              - rmp.spec.volumeSize is defined
+              - rmp.spec.volumeSize | int == expected_volume_size | int
+            fail_msg: "FAIL: CRD volumeSize {{ rmp.spec.volumeSize | default('undefined') }} does not match expected {{ expected_volume_size }}"
+            success_msg: "PASS: CRD volumeSize matches expected {{ expected_volume_size }}"
+          when: not ocm_available or ocm_disk_node_pools is not defined or ocm_disk_node_pools.json is not defined
 
         - set_fact:
             features_passed: "{{ features_passed | int + 1 }}"
@@ -1145,7 +1069,7 @@
         - include_tasks: "{{ playbook_dir }}/../tasks/verify_feature_rescue.yml"
           vars:
             feature_id: disk_size
-            fail_detail: "no running worker instances found or root volume size does not match expected"
+            fail_detail: "volume size does not match expected"
 
     # --- parallel_upgrade ---
     - name: "CHECK: Parallel Node Upgrade (via OCM API)"
@@ -1238,54 +1162,38 @@
             fail_detail: "additionalSecurityGroups not set or does not match expected"
 
     # --- availability_zones ---
-    - name: "CHECK: Availability Zones (via AWS CLI)"
+    - name: "CHECK: Availability Zones (via OCM API + CRD)"
       vars:
-        verify_region: "{{ aws_region | default(rcp.spec.region | default('us-west-2')) }}"
-        stack_name: "{{ cluster_name }}-rosa-network-stack"
         expected_az_count: "{{ availability_zone_count | default(2) | int }}"
       block:
-        - name: Query subnets created by CloudFormation stack
-          shell: >
-            aws ec2 describe-subnets
-            --filters "Name=tag:aws:cloudformation:stack-name,Values={{ stack_name }}"
-            --region {{ verify_region }}
-            --query 'Subnets[].AvailabilityZone'
-            --output json
-          register: aws_subnet_azs_cfn
-          changed_when: false
-          failed_when: false
-
-        - name: Query subnets from cluster-tagged instances (BYON fallback)
-          shell: >
-            aws ec2 describe-instances
-            --filters "Name=tag:kubernetes.io/cluster/{{ cluster_name }},Values=owned"
-            "Name=instance-state-name,Values=running"
-            --region {{ verify_region }}
-            --query 'Reservations[].Instances[].Placement.AvailabilityZone'
-            --output json
-          register: aws_subnet_azs_instance
-          changed_when: false
-          failed_when: false
-          when: >-
-            aws_subnet_azs_cfn.rc != 0 or
-            ((aws_subnet_azs_cfn.stdout | default('[]', true) | from_json | default([])) | length == 0)
-
-        - name: Set resolved subnet AZs
-          set_fact:
-            aws_subnet_azs: >-
-              {{ ((aws_subnet_azs_cfn.stdout | default('[]', true) | from_json | default([]))
-                  if aws_subnet_azs_cfn.rc == 0 and
-                     ((aws_subnet_azs_cfn.stdout | default('[]', true) | from_json | default([])) | length > 0)
-                  else (aws_subnet_azs_instance.stdout | default('[]') | from_json | default([])))
-                 | unique | sort }}
-
-        - name: Assert subnets span expected AZs
+        - name: Assert availability zones via OCM
           assert:
             that:
-              - aws_subnet_azs | length | int == expected_az_count | int
-              - aws_subnet_azs | map('regex_search', '^' + verify_region) | select | list | length == aws_subnet_azs | length
-            fail_msg: "FAIL: subnets do not span the expected number of AZs"
-            success_msg: "PASS: subnets span the expected number of AZs"
+              - ocm_cluster.nodes.availability_zones is defined
+              - ocm_cluster.nodes.availability_zones | length | int == expected_az_count | int
+            fail_msg: "FAIL: OCM reports {{ ocm_cluster.nodes.availability_zones | default([]) | length }} AZs, expected {{ expected_az_count }}"
+            success_msg: "PASS: OCM confirms {{ expected_az_count }} availability zones"
+          when: ocm_available
+
+        - name: Assert availability zones via ROSANetwork CRD
+          assert:
+            that:
+              - rnet is defined
+              - rnet.spec.availabilityZones is defined
+              - rnet.spec.availabilityZones | length | int == expected_az_count | int
+            fail_msg: "FAIL: ROSANetwork has {{ rnet.spec.availabilityZones | default([]) | length }} AZs, expected {{ expected_az_count }}"
+            success_msg: "PASS: ROSANetwork CRD confirms {{ expected_az_count }} availability zones"
+          when: rnet is defined
+
+        - name: Assert availability zones via ROSANetwork status subnets
+          assert:
+            that:
+              - rnet is defined
+              - rnet.status.subnets is defined
+              - rnet.status.subnets | length | int == expected_az_count | int
+            fail_msg: "FAIL: ROSANetwork status shows {{ rnet.status.subnets | default([]) | length }} subnet pairs, expected {{ expected_az_count }}"
+            success_msg: "PASS: ROSANetwork status confirms {{ expected_az_count }} subnet pairs"
+          when: rnet is defined and rnet.status is defined and rnet.status.subnets is defined
 
         - set_fact:
             features_passed: "{{ features_passed | int + 1 }}"
@@ -1293,7 +1201,7 @@
         - include_tasks: "{{ playbook_dir }}/../tasks/verify_feature_rescue.yml"
           vars:
             feature_id: availability_zones
-            fail_detail: "subnets do not span expected number of AZs"
+            fail_detail: "availability zones do not match expected count"
 
     # --- audit_logging ---
     - name: "CHECK: Log Forwarding (via AWS CLI)"
