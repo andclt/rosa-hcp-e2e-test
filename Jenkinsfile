@@ -378,8 +378,17 @@ pipeline {
                         archiveArtifacts artifacts: 'rosa-hcp-e2e-test/test-results/**/*.xml', allowEmptyArchive: true, followSymlinks: false, fingerprint: true
                     }
                     catch (ex) {
-                        echo 'Feature flag verification failed — features may not have been applied correctly'
-                        currentBuild.result = 'UNSTABLE'
+                        def securityFeatures = ['etcd-kms', 'fips', 'security-groups', 'external-oidc', 'private']
+                        def requestedFeatures = (params.CLUSTER_FEATURES ?: '').split(',').collect { it.trim() }
+                        def hasSecurityFeature = requestedFeatures.any { securityFeatures.contains(it) } ||
+                            params.FEATURE_GROUP in ['day1-security', 'day1-networking']
+                        if (hasSecurityFeature) {
+                            echo 'Feature flag verification FAILED for security-critical features — marking build as FAILURE'
+                            currentBuild.result = 'FAILURE'
+                        } else {
+                            echo 'Feature flag verification failed — features may not have been applied correctly'
+                            currentBuild.result = 'UNSTABLE'
+                        }
                     }
                 }
             }

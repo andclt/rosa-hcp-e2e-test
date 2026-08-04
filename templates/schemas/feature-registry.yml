@@ -26,7 +26,7 @@ var_map:
   no_cni: no_cni
   proxy_enabled: http_proxy
   external_oidc: external_oidc
-  break_glass_credentials: break_glass_credentials
+  # break_glass_credentials: action-type feature with its own playbook, no template var to map
   image_registry: image_registry_config
   parallel_upgrade: parallel_node_upgrade
   user_agent: user_agent

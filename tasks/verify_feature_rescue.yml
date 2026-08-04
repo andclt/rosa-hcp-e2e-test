@@ -2,7 +2,7 @@
 - block:
     - name: Check if CRD supports this feature field
       shell: >
-        oc get crd {{ crd_field_map[feature_id].crd }} -o json 2>/dev/null |
+        oc get crd {{ crd_field_map[feature_id].crd }} -o json |
         jq -r '.spec.versions[] | select(.served==true) |
         .schema.openAPIV3Schema.properties.spec.properties.{{ crd_field_map[feature_id].field.split(".")[0] }} // empty'
       register: crd_field_check
@@ -12,8 +12,18 @@
 
     - name: Set CRD check result for features without mapping
       set_fact:
-        crd_field_check: {stdout: "unknown", skipped: true}
+        crd_field_check: {stdout: "unknown", rc: 0, skipped: true}
       when: feature_id not in (crd_field_map | default({}))
+
+    - block:
+        - debug:
+            msg: "FAIL: {{ feature_id }} — CRD schema check failed (oc/jq error, rc={{ crd_field_check.rc | default('?') }}), treating as FAIL not WARN"
+        - set_fact:
+            features_failed: "{{ features_failed | int + 1 }}"
+            results_failed: "{{ results_failed + [feature_id + ': CRD schema check failed (oc error) — ' + fail_detail] }}"
+      when:
+        - feature_id in (crd_field_map | default({}))
+        - crd_field_check.rc | default(0) | int != 0
 
     - block:
         - debug:
@@ -23,6 +33,7 @@
             results_warned: "{{ results_warned + [feature_id + ': CRD does not have field ' + crd_field_map[feature_id].field] }}"
       when:
         - feature_id in (crd_field_map | default({}))
+        - crd_field_check.rc | default(0) | int == 0
         - (crd_field_check.stdout | default('')) == ""
 
     - block:
@@ -33,6 +44,7 @@
             results_failed: "{{ results_failed + [feature_id + ': ' + fail_detail] }}"
       when:
         - feature_id in (crd_field_map | default({}))
+        - crd_field_check.rc | default(0) | int == 0
         - (crd_field_check.stdout | default('')) != ""
 
     - block:
