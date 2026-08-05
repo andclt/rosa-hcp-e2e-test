@@ -51,7 +51,6 @@ limitation) and an incorrectly applied feature (test failure).
 | `external_oidc` | `--feature external-oidc` | `.spec.enableExternalAuthProviders` | `true`, plus `externalAuthProviders` array with issuerURL, audiences, claimMappings |
 | `fips` | `--feature fips` | `.spec.fips` | Value is `Enabled` |
 | `etcd_kms` | `--feature etcd-kms` | `.spec.etcdEncryptionKMSARN` | Non-empty, starts with `arn:aws:kms:`, matches requested ARN if provided |
-| `user_agent` | `--feature user-agent` | `.spec.userAgent` | Non-empty string present |
 | `cluster_autoscaler_expander` | `--feature autoscaler` | `.spec.autoscaler.expanders` | Contains `LeastWaste`, all values in valid set (LeastWaste, Priority, Random) |
 | `image_registry` | `--feature image-registry` | `.spec.clusterRegistryConfig` | Structure present with `allowedRegistriesForImport`, `registrySources`, domain matches expected (default: `quay.io`) |
 | `additional_tags` | `--feature tags` | `.spec.additionalTags` | Default tags (env, purpose, automated) present; custom tags match if provided via `-e additional_tags={}` |
@@ -108,7 +107,7 @@ that require a newer version than the target cluster:
 | Min Version | Features |
 |-------------|----------|
 | 4.18 | additional_tags, availability_zones, channel_group, domain_prefix |
-| 4.19 | private_network, no_cni, external_oidc, etcd_kms, security_groups, disk_size, parallel_upgrade, cluster_autoscaler_expander, image_registry, user_agent, proxy_enabled, break_glass_credentials |
+| 4.19 | private_network, no_cni, external_oidc, etcd_kms, security_groups, disk_size, parallel_upgrade, cluster_autoscaler_expander, image_registry, proxy_enabled, break_glass_credentials |
 | 4.20 | audit_logging |
 | 4.21 | fips |
 

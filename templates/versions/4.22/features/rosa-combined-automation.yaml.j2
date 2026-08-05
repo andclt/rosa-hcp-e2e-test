@@ -191,10 +191,6 @@ spec:
   etcdEncryptionKMSARN: {{ etcd_encryption_kms_arn }}
 {% endif %}
 
-{% if user_agent is defined and user_agent %}
-  userAgent: {{ user_agent }}
-{% endif %}
-
 {% if http_proxy is defined and http_proxy | bool %}
   proxy:
     httpProxy: {{ http_proxy_url | default('') }}

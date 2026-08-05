@@ -126,10 +126,6 @@ class TestExtraVarResolution:
         assert result["root_volume_size"] == "500"
         assert result["feature_disk_size_enabled"] == "true"
 
-    def test_ci_default_user_agent(self, fm):
-        result = fm.resolve_to_extra_vars(["user_agent"])
-        assert result["user_agent"] == "capa-e2e-test"
-
     def test_ci_default_tags(self, fm):
         import json
         result = fm.resolve_to_extra_vars(["additional_tags"])

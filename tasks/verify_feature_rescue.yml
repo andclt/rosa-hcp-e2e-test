@@ -56,9 +56,3 @@
       when: feature_id not in (crd_field_map | default({}))
   when: feature_id in requested_features_list
 
-- block:
-    - debug:
-        msg: "SKIP: {{ feature_id }} not requested"
-    - set_fact:
-        features_skipped: "{{ features_skipped | int + 1 }}"
-  when: feature_id not in requested_features_list

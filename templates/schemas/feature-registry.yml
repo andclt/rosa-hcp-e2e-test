@@ -29,7 +29,6 @@ var_map:
   # break_glass_credentials: action-type feature with its own playbook, no template var to map
   image_registry: image_registry_config
   parallel_upgrade: parallel_node_upgrade
-  user_agent: user_agent
   security_groups: additional_security_groups
   default_autoscaling: default_autoscaling
   cluster_autoscaler_expander: cluster_autoscaler_expander
@@ -55,7 +54,6 @@ cli_aliases:
   log-forwarding: audit_logging
   parallel-upgrade: parallel_upgrade
   image-registry: image_registry
-  user-agent: user_agent
   security-groups: security_groups
   autoscaling: default_autoscaling
 
@@ -87,7 +85,6 @@ cli_features:
   - availability_zones
   - image_registry
   - parallel_upgrade
-  - user_agent
   - security_groups
   - cluster_autoscaler_expander
   - audit_logging
@@ -464,9 +461,9 @@ suites:
         k8s_field: ".spec.clusterRegistryConfig"
         resource: ROSAControlPlane
 
-  - id: domain-useragent
-    name: Domain & User Agent
-    description: Domain prefix and ROSA CAPA user agent configuration
+  - id: domain-config
+    name: Domain Configuration
+    description: Domain prefix configuration
     category: Configuration
     phase: Day1
     features:
@@ -481,17 +478,6 @@ suites:
         resource: ROSAControlPlane
         placeholder: my-cluster
         max_length: 15
-
-      - id: user_agent
-        name: User Agent for ROSA CAPA
-        description: Custom user agent string sent with ROSA API requests
-        type: string
-        mutable: true
-        applies_to: [create, apply]
-        default: ""
-        ci_default: "capa-e2e-test"
-        k8s_field: ".spec.userAgent"
-        resource: ROSAControlPlane
 
   - id: day2-operations
     name: Day2 Operations

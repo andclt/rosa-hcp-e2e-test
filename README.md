@@ -229,7 +229,6 @@ The framework supports composable Day 1 feature testing via `--feature` CLI flag
 | `--feature autoscaling` | Default MachinePool autoscaling | ROSAControlPlane |
 | `--feature autoscaler` | Cluster autoscaler with expander | ROSAControlPlane |
 | `--feature log-forwarding` | Audit log forwarding to CloudWatch | ROSAControlPlane |
-| `--feature user-agent` | Custom ROSA API user agent | ROSAControlPlane |
 
 ### Feature Groups
 
