@@ -74,6 +74,18 @@
         msg: "Resolved OpenShift version: {{ openshift_version }} → {{ resolved_openshift_version }} (channel: {{ channel_group | default('stable') }})"
 
   rescue:
+    - name: Fail fast if OCM has no provisionable HCP version for this release
+      fail:
+        msg: >-
+          OpenShift version '{{ openshift_version }}' is not provisionable as a ROSA HCP
+          cluster: OCM returned no HCP-enabled versions in channel group
+          '{{ channel_group | default('stable') }}' on {{ _ocm_api_url }}.
+          Failing fast instead of falling back to a non-existent version, which would
+          otherwise hang in Provisioning until the readiness timeout.
+          Check available versions with:
+          ocm get /api/clusters_mgmt/v1/versions --parameter search="raw_id like '{{ openshift_version }}%' and hosted_control_plane_enabled='true' and enabled='true' and channel_group='{{ channel_group | default('stable') }}'"
+      when: ansible_failed_task.name == 'Fail if no HCP versions available'
+
     - name: Warn about OCM version resolution failure
       debug:
         msg: >-
