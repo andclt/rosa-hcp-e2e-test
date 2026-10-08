@@ -142,11 +142,19 @@
 
     - name: Wait for CAPA webhook caBundle to be injected by service-ca
       shell: |
-        oc --context='{{ ocp_context }}' get mutatingwebhookconfiguration \
-          capa-mutating-webhook-configuration \
-          -o jsonpath='{.webhooks[0].clientConfig.caBundle}' 2>/dev/null || echo ""
+        check_cabundle() {
+          json=$(oc --context='{{ ocp_context }}' get "$1" "$2" -o json 2>/dev/null) || return 1
+          printf '%s\n' "$json" |
+            jq -e '(.webhooks | length) > 0 and all(.webhooks[]; (.clientConfig.caBundle // "") != "")' >/dev/null
+        }
+        if check_cabundle mutatingwebhookconfiguration capa-mutating-webhook-configuration &&
+           check_cabundle validatingwebhookconfiguration capa-validating-webhook-configuration; then
+          echo "ready"
+        else
+          echo ""
+        fi
       register: capa_webhook_cabundle_check
-      until: capa_webhook_cabundle_check.stdout | trim | length > 0
+      until: capa_webhook_cabundle_check.stdout | trim == "ready"
       retries: 30
       delay: 10
       changed_when: false
@@ -170,9 +178,12 @@
         echo "=== serving cert secret (service-ca) ==="
         oc --context='{{ ocp_context }}' get secret capa-webhook-service-cert -n {{ capa_namespace }} || true
         echo ""
-        echo "=== mutating webhook caBundle present? ==="
-        oc --context='{{ ocp_context }}' get mutatingwebhookconfiguration capa-mutating-webhook-configuration \
-          -o jsonpath='{range .webhooks[*]}{.name}{" caBundle_len="}{.clientConfig.caBundle}{"\n"}{end}' | sed 's/caBundle_len=.\{1,\}/caBundle_len=PRESENT/' || true
+        echo "=== webhook caBundle present per entry (mutating + validating)? ==="
+        for cfg in mutatingwebhookconfiguration/capa-mutating-webhook-configuration validatingwebhookconfiguration/capa-validating-webhook-configuration; do
+          echo "--- $cfg"
+          oc --context='{{ ocp_context }}' get "$cfg" \
+            -o jsonpath='{range .webhooks[*]}{.name}{" caBundle_len="}{.clientConfig.caBundle}{"\n"}{end}' | sed 's/caBundle_len=.\{1,\}/caBundle_len=PRESENT/' || true
+        done
       register: capa_webhook_diagnostics
       changed_when: false
       failed_when: false
