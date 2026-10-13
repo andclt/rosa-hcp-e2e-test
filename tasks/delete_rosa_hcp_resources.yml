@@ -7,52 +7,73 @@
 # ================================================================
 
 - name: Set agent monitor log file for real-time monitoring
-  set_fact:
+  ansible.builtin.set_fact:
     agent_monitor_log: "/tmp/deletion-agent-{{ cluster_name }}.log"
 
 - name: Initialize agent monitor log file
-  copy:
+  # force: true is intentional — start with a fresh log each run for clean output
+  ansible.builtin.copy:
     content: ""
     dest: "{{ agent_monitor_log }}"
     force: true
+    mode: '0644'
+
+- name: Initialize deletion failure tracking
+  ansible.builtin.set_fact:
+    rcp_deletion_failed: false
+    rosanetwork_deletion_failed: false
+    cf_deletion_failed: false
+    rrc_deletion_failed: false
 
 - name: Check if Cluster exists
-  shell: |
-    oc get cluster {{ cluster_name }} -n {{ rosa_hcp_namespace }} -o name 2>/dev/null || echo "not-found"
+  ansible.builtin.shell:
+    cmd: |
+      oc get cluster "$CLUSTER_NAME" -n "$NAMESPACE" -o name 2>/dev/null || echo "__NOTFOUND__"
+  environment:
+    CLUSTER_NAME: "{{ cluster_name }}"
+    NAMESPACE: "{{ rosa_hcp_namespace }}"
   register: cluster_exists
   changed_when: false
 
 - name: Check if ROSAControlPlane exists
-  shell: |
-    oc get rosacontrolplane {{ cluster_name }} -n {{ rosa_hcp_namespace }} -o name 2>/dev/null || echo "not-found"
+  ansible.builtin.shell:
+    cmd: |
+      oc get rosacontrolplane "$CLUSTER_NAME" -n "$NAMESPACE" -o name 2>/dev/null || echo "__NOTFOUND__"
+  environment:
+    CLUSTER_NAME: "{{ cluster_name }}"
+    NAMESPACE: "{{ rosa_hcp_namespace }}"
   register: rcp_exists
   changed_when: false
 
 - name: Check if ROSAMachinePool exists
-  shell: |
-    oc get rosamachinepool {{ machine_pool_name }} -n {{ rosa_hcp_namespace }} -o name 2>/dev/null || echo "not-found"
+  ansible.builtin.shell:
+    cmd: |
+      oc get rosamachinepool "$MACHINE_POOL_NAME" -n "$NAMESPACE" -o name 2>/dev/null || echo "__NOTFOUND__"
+  environment:
+    MACHINE_POOL_NAME: "{{ machine_pool_name }}"
+    NAMESPACE: "{{ rosa_hcp_namespace }}"
   register: rmp_exists
   changed_when: false
 
 - name: Discover ROSANetwork by label or name
-  shell: |
-    COUNT=$(oc get rosanetwork -n "$NAMESPACE" \
-      -l "cluster.x-k8s.io/cluster-name=$CLUSTER_NAME" \
-      -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null \
-      | grep -c . || echo "0")
-    COUNT=${COUNT:-0}
-    if [ "$COUNT" -gt 1 ]; then
-      echo "ERROR: Found $COUNT ROSANetwork resources with label cluster.x-k8s.io/cluster-name=$CLUSTER_NAME — cannot safely determine target. Aborting." >&2
-      exit 1
-    fi
-    FOUND=$(oc get rosanetwork -n "$NAMESPACE" \
-      -l "cluster.x-k8s.io/cluster-name=$CLUSTER_NAME" \
-      -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
-    if [ -z "$FOUND" ]; then
-      FOUND=$(oc get rosanetwork "$NETWORK_NAME" -n "$NAMESPACE" \
-        -o jsonpath='{.metadata.name}' 2>/dev/null)
-    fi
-    echo "${FOUND:-not-found}"
+  ansible.builtin.shell:
+    cmd: |
+      COUNT=$(oc get rosanetwork -n "$NAMESPACE" \
+        -l "cluster.x-k8s.io/cluster-name=$CLUSTER_NAME" \
+        -o name 2>/dev/null | wc -l | awk '{print $1}')
+      if [ "$COUNT" -gt 1 ]; then
+        echo "ERROR: Found $COUNT ROSANetwork resources with label cluster.x-k8s.io/cluster-name=$CLUSTER_NAME — cannot safely determine target. Aborting." >&2
+        exit 1
+      fi
+      FOUND=$(oc get rosanetwork -n "$NAMESPACE" \
+        -l "cluster.x-k8s.io/cluster-name=$CLUSTER_NAME" \
+        -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+      if [ -z "$FOUND" ]; then
+        echo "WARNING: No ROSANetwork found by label, falling back to name lookup: $NETWORK_NAME" >&2
+        FOUND=$(oc get rosanetwork "$NETWORK_NAME" -n "$NAMESPACE" \
+          -o jsonpath='{.metadata.name}' 2>/dev/null)
+      fi
+      echo "${FOUND:-not-found}"
   environment:
     NAMESPACE: "{{ rosa_hcp_namespace }}"
     CLUSTER_NAME: "{{ cluster_name }}"
@@ -61,14 +82,15 @@
   changed_when: false
 
 - name: Set discovered ROSANetwork name
-  set_fact:
+  ansible.builtin.set_fact:
     discovered_rosa_network_name: "{{ rn_exists.stdout | trim }}"
 
 - name: Get ROSANetwork stack name from resource spec
-  shell: |
-    oc get rosanetwork "$NETWORK_NAME" \
-      -n "$NAMESPACE" \
-      -o jsonpath='{.spec.stackName}' 2>/dev/null || true
+  ansible.builtin.shell:
+    cmd: |
+      oc get rosanetwork "$NETWORK_NAME" \
+        -n "$NAMESPACE" \
+        -o jsonpath='{.spec.stackName}' 2>/dev/null || true
   environment:
     NETWORK_NAME: "{{ discovered_rosa_network_name }}"
     NAMESPACE: "{{ rosa_hcp_namespace }}"
@@ -77,31 +99,34 @@
   when: discovered_rosa_network_name != 'not-found'
 
 - name: Set discovered CF stack name
-  set_fact:
+  # NOTE: Jinja2 does NOT short-circuit, but | default('') makes rn_stack_name_raw.stdout safe when the task was skipped.
+  # The discovered_rosa_network_name guard must remain the left operand of 'and' so the ternary selects the else branch
+  # before evaluating rn_stack_name_raw.stdout when ROSANetwork was not found.
+  ansible.builtin.set_fact:
     discovered_cf_stack_name: >-
       {{ rn_stack_name_raw.stdout | default('') | trim
          if (discovered_rosa_network_name != 'not-found' and rn_stack_name_raw.stdout | default('') | trim != '')
          else cluster_name + '-rosa-network-stack' }}
 
 - name: Discover ROSARoleConfig by label or name
-  shell: |
-    COUNT=$(oc get rosaroleconfig -n "$NAMESPACE" \
-      -l "cluster.x-k8s.io/cluster-name=$CLUSTER_NAME" \
-      -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null \
-      | grep -c . || echo "0")
-    COUNT=${COUNT:-0}
-    if [ "$COUNT" -gt 1 ]; then
-      echo "ERROR: Found $COUNT ROSARoleConfig resources with label cluster.x-k8s.io/cluster-name=$CLUSTER_NAME — cannot safely determine target. Aborting." >&2
-      exit 1
-    fi
-    FOUND=$(oc get rosaroleconfig -n "$NAMESPACE" \
-      -l "cluster.x-k8s.io/cluster-name=$CLUSTER_NAME" \
-      -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
-    if [ -z "$FOUND" ]; then
-      FOUND=$(oc get rosaroleconfig "$ROLE_CONFIG_NAME" -n "$NAMESPACE" \
-        -o jsonpath='{.metadata.name}' 2>/dev/null)
-    fi
-    echo "${FOUND:-not-found}"
+  ansible.builtin.shell:
+    cmd: |
+      COUNT=$(oc get rosaroleconfig -n "$NAMESPACE" \
+        -l "cluster.x-k8s.io/cluster-name=$CLUSTER_NAME" \
+        -o name 2>/dev/null | wc -l | awk '{print $1}')
+      if [ "$COUNT" -gt 1 ]; then
+        echo "ERROR: Found $COUNT ROSARoleConfig resources with label cluster.x-k8s.io/cluster-name=$CLUSTER_NAME — cannot safely determine target. Aborting." >&2
+        exit 1
+      fi
+      FOUND=$(oc get rosaroleconfig -n "$NAMESPACE" \
+        -l "cluster.x-k8s.io/cluster-name=$CLUSTER_NAME" \
+        -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+      if [ -z "$FOUND" ]; then
+        echo "WARNING: No ROSARoleConfig found by label, falling back to name lookup: $ROLE_CONFIG_NAME" >&2
+        FOUND=$(oc get rosaroleconfig "$ROLE_CONFIG_NAME" -n "$NAMESPACE" \
+          -o jsonpath='{.metadata.name}' 2>/dev/null)
+      fi
+      echo "${FOUND:-not-found}"
   environment:
     NAMESPACE: "{{ rosa_hcp_namespace }}"
     CLUSTER_NAME: "{{ cluster_name }}"
@@ -110,59 +135,64 @@
   changed_when: false
 
 - name: Set discovered ROSARoleConfig name
-  set_fact:
+  ansible.builtin.set_fact:
     discovered_rosa_role_config_name: "{{ rrc_exists.stdout | trim }}"
 
 - name: Display resource status
-  debug:
+  ansible.builtin.debug:
     msg: |
       Current Resource Status:
-      • Cluster: {{ 'Found' if 'not-found' not in cluster_exists.stdout else 'Not Found' }}
-      • ROSAControlPlane: {{ 'Found' if 'not-found' not in rcp_exists.stdout else 'Not Found' }}
-      • ROSAMachinePool: {{ 'Found' if 'not-found' not in rmp_exists.stdout else 'Not Found' }}
+      • Cluster: {{ 'Found' if '__NOTFOUND__' not in cluster_exists.stdout else 'Not Found' }}
+      • ROSAControlPlane: {{ 'Found' if '__NOTFOUND__' not in rcp_exists.stdout else 'Not Found' }}
+      • ROSAMachinePool: {{ 'Found' if '__NOTFOUND__' not in rmp_exists.stdout else 'Not Found' }}
       • ROSANetwork: {{ 'Found (' + discovered_rosa_network_name + ')' if discovered_rosa_network_name != 'not-found' else 'Not Found' }}
       • ROSARoleConfig: {{ 'Found (' + discovered_rosa_role_config_name + ')' if discovered_rosa_role_config_name != 'not-found' else 'Not Found' }}
 
 - name: Build list of resources to delete
-  set_fact:
+  ansible.builtin.set_fact:
     resources_to_delete: []
 
 - name: Add cluster to deletion list (if exists)
-  set_fact:
+  ansible.builtin.set_fact:
     resources_to_delete: "{{ resources_to_delete + ['cluster/' + cluster_name] }}"
-  when: "'not-found' not in cluster_exists.stdout"
+  when: "'__NOTFOUND__' not in cluster_exists.stdout"
 
 - name: Add ROSAControlPlane to deletion list (if exists)
-  set_fact:
+  ansible.builtin.set_fact:
     resources_to_delete: "{{ resources_to_delete + ['rosacontrolplane/' + cluster_name] }}"
-  when: "'not-found' not in rcp_exists.stdout"
+  when: "'__NOTFOUND__' not in rcp_exists.stdout"
 
 - name: Display resources to be deleted
-  debug:
+  ansible.builtin.debug:
     msg: |
       Resources to delete:
       {{ resources_to_delete | join('\n      ') }}
   when: resources_to_delete | length > 0
 
 - name: Delete all ROSA resources with single oc delete command
-  shell: |
-    # shellcheck disable=SC2086
-    oc delete -n "$NAMESPACE" $RESOURCES_TO_DELETE --wait=false
+  ansible.builtin.shell:
+    cmd: |
+      # $RESOURCES_TO_DELETE is intentionally unquoted — word-splits the space-joined list
+      # into individual resource arguments. cluster_name must not contain spaces (enforced
+      # by OCP naming constraints: [a-z0-9-]+).
+      # shellcheck disable=SC2086
+      oc delete -n "$NAMESPACE" $RESOURCES_TO_DELETE --wait=false
   environment:
     NAMESPACE: "{{ rosa_hcp_namespace }}"
     RESOURCES_TO_DELETE: "{{ resources_to_delete | join(' ') }}"
   register: delete_all
+  changed_when: (delete_all.rc | default(-1)) == 0
   when: resources_to_delete | length > 0
 
 - name: Show deletion status
-  debug:
+  ansible.builtin.debug:
     msg: "✓ Deletion initiated for {{ resources_to_delete | length }} resource(s)"
   when:
     - resources_to_delete | length > 0
-    - delete_all.rc == 0
+    - (delete_all.rc | default(-1)) == 0
 
 - name: No resources to delete
-  debug:
+  ansible.builtin.debug:
     msg: "ℹ️  No matching resources found to delete"
   when: resources_to_delete | length == 0
 
