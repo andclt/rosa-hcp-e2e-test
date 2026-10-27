@@ -219,6 +219,12 @@
           • Worker Role ARN: {{ worker_role_arn | default('N/A') }}
           • OIDC Provider ARN: {{ oidc_provider_arn | default('N/A') }}
 
+    - name: Configure ETCD KMS permissions on Installer Role
+      include_tasks: configure_etcd_kms_permissions.yml
+      when:
+        - etcd_encryption_kms_arn is defined
+        - etcd_encryption_kms_arn | trim | length > 0
+
 - name: Skip RosaRoleConfig creation
   when: not (create_rosa_roles | bool)
   debug:

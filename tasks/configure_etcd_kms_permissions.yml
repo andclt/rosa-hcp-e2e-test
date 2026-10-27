@@ -1,0 +1,54 @@
+---
+# Configure ETCD KMS Permissions on ROSA HCP Installer Role
+# Needed for OCM to validate the KMS key when etcdEncryptionKMSARN is specified.
+
+- name: Set installer role name fact
+  set_fact:
+    target_installer_role: >-
+      {{ installer_role_arn | default('') | regex_replace('^.*/', '') | trim
+         if (installer_role_arn is defined and installer_role_arn | length > 0)
+         else (rosa_role_prefix | default(cluster_name)) + '-HCP-ROSA-Installer-Role' }}
+
+- name: Display KMS role configuration message
+  debug:
+    msg: |
+      Adding KMS permissions for etcd encryption:
+      • Installer Role: {{ target_installer_role }}
+      • KMS Key ARN: {{ etcd_encryption_kms_arn }}
+      • Policy Name: {{ cluster_name }}-etcd-kms-policy
+
+- name: Attach KMS policy to Installer Role
+  no_log: true
+  environment:
+    AWS_ACCESS_KEY_ID: "{{ AWS_ACCESS_KEY_ID | default(lookup('env', 'AWS_ACCESS_KEY_ID')) }}"
+    AWS_SECRET_ACCESS_KEY: "{{ AWS_SECRET_ACCESS_KEY | default(lookup('env', 'AWS_SECRET_ACCESS_KEY')) }}"
+    AWS_DEFAULT_REGION: "{{ aws_region | default(lookup('env', 'AWS_DEFAULT_REGION')) | default('us-west-2') }}"
+  shell: |
+    POLICY_DOC='{
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "RosaInstallerEtcdKmsPermissions",
+          "Effect": "Allow",
+          "Action": [
+            "kms:DescribeKey",
+            "kms:CreateGrant",
+            "kms:Encrypt",
+            "kms:Decrypt",
+            "kms:ReEncrypt*",
+            "kms:GenerateDataKey*"
+          ],
+          "Resource": "{{ etcd_encryption_kms_arn }}"
+        }
+      ]
+    }'
+
+    aws iam put-role-policy \
+      --role-name "{{ target_installer_role }}" \
+      --policy-name "{{ cluster_name }}-etcd-kms-policy" \
+      --policy-document "$POLICY_DOC"
+  register: attach_kms_policy_result
+
+- name: Verify KMS policy attached successfully
+  debug:
+    msg: "✅ Successfully attached KMS policy '{{ cluster_name }}-etcd-kms-policy' to role '{{ target_installer_role }}'"

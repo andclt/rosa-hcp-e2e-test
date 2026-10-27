@@ -1,0 +1,24 @@
+---
+# Clean up ETCD KMS inline policy on Installer Role
+# Ensures no leftover inline policies before or after ROSARoleConfig deletion.
+
+- name: Set installer role name for KMS policy cleanup
+  set_fact:
+    cleanup_installer_role: >-
+      {{ installer_role_arn | default('') | regex_replace('^.*/', '') | trim
+         if (installer_role_arn is defined and installer_role_arn | length > 0)
+         else (rosa_role_prefix | default(cluster_name)) + '-HCP-ROSA-Installer-Role' }}
+
+- name: Remove KMS inline policy from Installer Role
+  no_log: true
+  environment:
+    AWS_ACCESS_KEY_ID: "{{ AWS_ACCESS_KEY_ID | default(lookup('env', 'AWS_ACCESS_KEY_ID')) }}"
+    AWS_SECRET_ACCESS_KEY: "{{ AWS_SECRET_ACCESS_KEY | default(lookup('env', 'AWS_SECRET_ACCESS_KEY')) }}"
+    AWS_DEFAULT_REGION: "{{ aws_region | default(lookup('env', 'AWS_DEFAULT_REGION')) | default('us-west-2') }}"
+  shell: |
+    aws iam delete-role-policy \
+      --role-name "{{ cleanup_installer_role }}" \
+      --policy-name "{{ cluster_name }}-etcd-kms-policy" 2>/dev/null || true
+  register: delete_kms_policy_result
+  failed_when: false
+  changed_when: false

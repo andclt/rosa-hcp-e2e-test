@@ -136,3 +136,26 @@ def test_playbook_any_errors_fatal(playbook_file):
     play = plays[0]
     assert play.get("any_errors_fatal") is True, \
         f"{playbook_file}: any_errors_fatal should be true"
+
+
+# ================================================================
+# ETCD KMS Permission Tasks
+# ================================================================
+
+def test_etcd_kms_tasks_exist():
+    tasks_dir = BASE_DIR / "tasks"
+    assert (tasks_dir / "configure_etcd_kms_permissions.yml").exists()
+    assert (tasks_dir / "cleanup_etcd_kms_permissions.yml").exists()
+
+
+def test_provision_includes_etcd_kms():
+    content = (BASE_DIR / "tasks" / "provision_rosa_hcp_with_automation.yml").read_text()
+    assert "configure_etcd_kms_permissions.yml" in content
+
+
+def test_delete_includes_etcd_kms():
+    content = (BASE_DIR / "tasks" / "delete_rosa_hcp_resources.yml").read_text()
+    assert "cleanup_etcd_kms_permissions.yml" in content
+    content_cleanup = (BASE_DIR / "tasks" / "cleanup_rosa_role_config.yml").read_text()
+    assert "cleanup_etcd_kms_permissions.yml" in content_cleanup
+

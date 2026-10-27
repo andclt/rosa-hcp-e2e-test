@@ -59,6 +59,11 @@
               - Worker Role ARN: {{ worker_role_arn }}
               - OIDC Provider ARN: {{ oidc_provider_arn }}
 
+        - name: Clean up ETCD KMS permissions on Installer Role
+          include_tasks: cleanup_etcd_kms_permissions.yml
+          when:
+            - (AWS_ACCESS_KEY_ID is defined and AWS_ACCESS_KEY_ID | length > 0 and AWS_SECRET_ACCESS_KEY is defined and AWS_SECRET_ACCESS_KEY | length > 0) or (lookup('env', 'AWS_ACCESS_KEY_ID') | length > 0 and lookup('env', 'AWS_SECRET_ACCESS_KEY') | length > 0)
+
         - name: Delete ROSARoleConfig resource
           kubernetes.core.k8s:
             api_version: infrastructure.cluster.x-k8s.io/v1beta2
